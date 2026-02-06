@@ -5,12 +5,22 @@ import { generateQuizQuestions } from './services/geminiService.ts';
 import Flashcard from './components/Flashcard.tsx';
 import QuizEngine from './components/QuizEngine.tsx';
 
+const STORAGE_KEY = 'ai_flashcards_sheet_url';
+
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('setup');
   const [cards, setCards] = useState<FlashcardData[]>([]);
   const [sheetUrl, setSheetUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 컴포넌트 마운트 시 저장된 URL 불러오기
+  useEffect(() => {
+    const savedUrl = localStorage.getItem(STORAGE_KEY);
+    if (savedUrl) {
+      setSheetUrl(savedUrl);
+    }
+  }, []);
 
   const parseCSV = (csvText: string): FlashcardData[] => {
     const lines = csvText.split(/\r?\n/).filter(line => line.trim());
@@ -52,6 +62,7 @@ const App: React.FC = () => {
       if (parsedCards.length > 0) {
         setCards(parsedCards);
         setError(null);
+        setAppState('study');
       } else {
         setError("'공부내용'과 '뉴스요약' 열을 찾을 수 없거나 데이터가 비어있습니다.");
       }
@@ -60,6 +71,8 @@ const App: React.FC = () => {
   };
 
   const fetchGoogleSheet = async () => {
+    if (!sheetUrl.trim()) return;
+    
     if (!sheetUrl.includes('docs.google.com/spreadsheets')) {
       setError("유효한 구글 시트 URL을 입력해주세요.");
       return;
@@ -79,6 +92,8 @@ const App: React.FC = () => {
       const parsedCards = parseCSV(csvText);
       
       if (parsedCards.length > 0) {
+        // 성공 시 URL 저장
+        localStorage.setItem(STORAGE_KEY, sheetUrl);
         setCards(parsedCards);
         setAppState('study');
       } else {
@@ -89,6 +104,11 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const clearSavedUrl = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setSheetUrl('');
   };
 
   return (
@@ -119,21 +139,36 @@ const App: React.FC = () => {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="p-6 border-2 border-dashed border-slate-200 rounded-xl hover:border-indigo-300 transition-colors bg-slate-50">
-                <h3 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-2h2v2zm0-4H7v-2h2v2zm0-4H7V7h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/></svg>
-                  URL 붙여넣기
-                </h3>
-                <input 
-                  type="text" 
-                  placeholder="구글 시트 주소를 입력하세요"
-                  className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4 text-sm shadow-inner bg-white"
-                  value={sheetUrl}
-                  onChange={(e) => setSheetUrl(e.target.value)}
-                />
+              <div className="p-6 border-2 border-dashed border-slate-200 rounded-xl hover:border-indigo-300 transition-colors bg-slate-50 relative">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-2h2v2zm0-4H7v-2h2v2zm0-4H7V7h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/></svg>
+                    URL 붙여넣기
+                  </h3>
+                  {localStorage.getItem(STORAGE_KEY) && (
+                    <button 
+                      onClick={clearSavedUrl}
+                      className="text-[10px] text-red-500 hover:underline font-bold"
+                    >
+                      저장된 주소 삭제
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="구글 시트 주소를 입력하세요"
+                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4 text-sm shadow-inner bg-white"
+                    value={sheetUrl}
+                    onChange={(e) => setSheetUrl(e.target.value)}
+                  />
+                  {localStorage.getItem(STORAGE_KEY) === sheetUrl && sheetUrl !== '' && (
+                    <span className="absolute right-3 top-3.5 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">저장됨</span>
+                  )}
+                </div>
                 <button 
                   onClick={fetchGoogleSheet}
-                  disabled={isLoading}
+                  disabled={isLoading || !sheetUrl}
                   className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 shadow-md active:scale-95"
                 >
                   {isLoading ? '연결 중...' : '시트 데이터 가져오기'}
