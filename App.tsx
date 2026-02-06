@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FlashcardData, AppState, QuizQuestion } from './types';
-import { generateQuizQuestions } from './services/geminiService';
-import Flashcard from './components/Flashcard';
-import QuizEngine from './components/QuizEngine';
+import { FlashcardData, AppState, QuizQuestion } from './types.ts';
+import { generateQuizQuestions } from './services/geminiService.ts';
+import Flashcard from './components/Flashcard.tsx';
+import QuizEngine from './components/QuizEngine.tsx';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('setup');
@@ -12,30 +12,24 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse CSV data based on specific headers from the user's Google Sheet
   const parseCSV = (csvText: string): FlashcardData[] => {
     const lines = csvText.split(/\r?\n/).filter(line => line.trim());
     if (lines.length < 2) return [];
 
-    // Extract headers and clean them
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
     
-    // Find column indices for '공부내용' (Word) and '뉴스요약' (Definition)
     const wordIdx = headers.indexOf('공부내용');
     const defIdx = headers.indexOf('뉴스요약');
 
-    // Fallback indices if headers not found exactly as requested (C=2, D=3)
     const finalWordIdx = wordIdx !== -1 ? wordIdx : 2;
     const finalDefIdx = defIdx !== -1 ? defIdx : 3;
 
     const parsed: FlashcardData[] = [];
     lines.slice(1).forEach((line, idx) => {
-      // Split by comma but handle cases where content might contain commas inside quotes
       const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(p => p.trim().replace(/^"|"$/g, ''));
       
       if (parts[finalWordIdx] && parts[finalDefIdx]) {
-        // Basic check to skip empty or header-like rows that might repeat
-        if (parts[finalWordIdx] === '공부내용' || parts[finalWordIdx] === 'trip' && idx > 50) return;
+        if (parts[finalWordIdx] === '공부내용' || (parts[finalWordIdx] === 'trip' && idx > 50)) return;
 
         parsed.push({
           id: `card-${idx}-${Date.now()}`,
@@ -79,7 +73,7 @@ const App: React.FC = () => {
       
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetIdMatch[1]}/gviz/tq?tqx=out:csv`;
       const response = await fetch(csvUrl);
-      if (!response.ok) throw new Error("시트를 불러오는데 실패했습니다. 시트가 '링크가 있는 모든 사용자'에게 공개되어 있는지 확인하세요.");
+      if (!response.ok) throw new Error("시트를 불러오는데 실패했습니다. 시트가 공개되어 있는지 확인하세요.");
       
       const csvText = await response.text();
       const parsedCards = parseCSV(csvText);

@@ -1,13 +1,13 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { FlashcardData, QuizQuestion } from "../types";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+import { FlashcardData, QuizQuestion } from "../types.ts";
 
 export const generateQuizQuestions = async (cards: FlashcardData[]): Promise<QuizQuestion[]> => {
   if (!cards || cards.length === 0) return [];
   
-  // Pick up to 10 random cards for the quiz
+  // Create AI instance inside function to ensure API_KEY is loaded correctly
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  
   const selectedCards = [...cards].sort(() => 0.5 - Math.random()).slice(0, 10);
   
   const prompt = `Generate a multiple-choice quiz based on these flashcards. 
@@ -48,7 +48,6 @@ export const generateQuizQuestions = async (cards: FlashcardData[]): Promise<Qui
     }));
   } catch (error) {
     console.error("Gemini Quiz Generation Error:", error);
-    // Fallback logic if AI fails
     return selectedCards.map((card, index) => ({
       id: `fallback-${index}`,
       word: card.word,

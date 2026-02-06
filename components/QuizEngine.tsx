@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { FlashcardData, QuizQuestion } from '../types';
-import { generateQuizQuestions } from '../services/geminiService';
+import { FlashcardData, QuizQuestion } from '../types.ts';
+import { generateQuizQuestions } from '../services/geminiService.ts';
 
 interface QuizEngineProps {
   cards: FlashcardData[];
@@ -18,7 +18,6 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ cards }) => {
 
   useEffect(() => {
     loadQuiz();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadQuiz = async () => {
@@ -104,7 +103,6 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ cards }) => {
 
   return (
     <div className="w-full space-y-8 animate-in slide-in-from-right-8 duration-300">
-      {/* Progress */}
       <div className="flex justify-between items-center px-2">
         <span className="text-sm font-semibold text-slate-500">Question {currentIndex + 1}/{questions.length}</span>
         <span className="text-sm font-semibold text-indigo-600">Score: {score}</span>
