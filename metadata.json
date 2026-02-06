@@ -1,0 +1,5 @@
+{
+  "name": "AI Smart Flashcards",
+  "description": "Transform your Google Sheets or CSV data into intelligent flashcards and AI-powered quizzes using Gemini.",
+  "requestFramePermissions": []
+}
