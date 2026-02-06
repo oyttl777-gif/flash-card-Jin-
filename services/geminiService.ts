@@ -5,34 +5,62 @@ import { FlashcardData, QuizQuestion } from "../types.ts";
 export const generateQuizQuestions = async (cards: FlashcardData[]): Promise<QuizQuestion[]> => {
   if (!cards || cards.length === 0) return [];
   
-  // 빌드 환경에서 process.env.API_KEY 참조 에러 방지
   const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
   
+  // 퀴즈를 위해 5~10개의 단어 무작위 선택
+  const selectedCards = [...cards].sort(() => 0.5 - Math.random()).slice(0, 10);
+
+  // 비상용 퀴즈 생성 함수 (AI가 없어도 작동하도록)
+  const createFallbackQuiz = () => {
+    return selectedCards.map((card, index) => {
+      // 현재 단어의 뜻을 제외한 다른 모든 뜻들을 수집
+      const otherDefinitions = cards
+        .filter(c => c.id !== card.id)
+        .map(c => c.definition);
+      
+      // 다른 뜻들 중 무작위로 3개 선택 (오답으로 사용)
+      const distractors = [...otherDefinitions]
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 3);
+      
+      // 만약 다른 단어가 부족하면 기본값 추가
+      while (distractors.length < 3) {
+        distractors.push(`오답 후보 ${distractors.length + 1}`);
+      }
+
+      return {
+        id: `fallback-${index}-${Date.now()}`,
+        word: card.word,
+        correctAnswer: card.definition,
+        options: [card.definition, ...distractors].sort(() => Math.random() - 0.5),
+        explanation: "현재는 단어장의 데이터만으로 생성된 퀴즈입니다. (AI 연결 확인 필요)"
+      };
+    });
+  };
+
+  // API Key가 없으면 즉시 비상용 퀴즈 반환
   if (!apiKey) {
-    console.error("API Key is missing. Please check your environment configuration.");
-    return cards.slice(0, 5).map((card, index) => ({
-      id: `error-${index}`,
-      word: card.word,
-      correctAnswer: card.definition,
-      options: [card.definition, "오답 1", "오답 2", "오답 3"].sort(() => Math.random() - 0.5),
-      explanation: "API 키 설정이 필요합니다."
-    }));
+    console.warn("API Key missing. Using local data for quiz.");
+    return createFallbackQuiz();
   }
 
   const ai = new GoogleGenAI({ apiKey });
   
-  // 퀴즈를 위해 최대 10개의 단어 무작위 선택
-  const selectedCards = [...cards].sort(() => 0.5 - Math.random()).slice(0, 10);
+  const prompt = `당신은 전문 영어 교육 전문가입니다. 
+  사용자의 단어장 데이터를 바탕으로 학습 효과가 높은 4지선다형 퀴즈를 만드세요.
   
-  const prompt = `당신은 유능한 영어 강사입니다. 다음 단어 리스트를 바탕으로 4지선다형 객관식 퀴즈를 생성하세요.
-  각 문제마다 정답과 유사한 맥락의 오답 3개를 만드세요. 오답은 반드시 정답과 같은 언어(한국어)여야 합니다.
-  단어 리스트: ${JSON.stringify(selectedCards.map(c => ({ word: c.word, definition: c.definition })))}
-  
-  반드시 제공된 JSON 스키마 형식에 맞춰서 순수한 JSON 배열만 반환하세요.`;
+  [지침]
+  1. 각 단어의 'correctAnswer'는 제공된 정의와 일치해야 합니다.
+  2. 3개의 오답(distractors)은 정답과 혼동될 수 있을 정도로 그럴듯해야 합니다.
+  3. 모든 텍스트(오답, 설명)는 한국어로 작성하세요.
+  4. 'explanation'에는 해당 단어가 들어간 간단한 영어 예문과 한국어 해석을 포함하세요.
+
+  [데이터]
+  ${JSON.stringify(selectedCards.map(c => ({ word: c.word, definition: c.definition })))}`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // 복잡한 추론을 위해 Pro 모델 사용
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -46,9 +74,9 @@ export const generateQuizQuestions = async (cards: FlashcardData[]): Promise<Qui
               options: { 
                 type: Type.ARRAY, 
                 items: { type: Type.STRING },
-                description: "정답을 포함하여 총 4개의 선택지를 제공하세요."
+                description: "정답 1개와 오답 3개를 포함한 총 4개의 선택지"
               },
-              explanation: { type: Type.STRING, description: "해당 단어가 사용된 아주 짧은 예문 하나를 한국어로 제공하세요." }
+              explanation: { type: Type.STRING }
             },
             required: ["word", "correctAnswer", "options", "explanation"]
           }
@@ -56,11 +84,8 @@ export const generateQuizQuestions = async (cards: FlashcardData[]): Promise<Qui
       }
     });
 
-    if (!response || !response.text) {
-      throw new Error("AI 응답이 비어있습니다.");
-    }
+    if (!response.text) throw new Error("Empty response");
 
-    // AI 응답 텍스트 정제 (불필요한 마크다운 제거)
     let jsonStr = response.text.trim();
     if (jsonStr.startsWith('```')) {
       jsonStr = jsonStr.replace(/^```json\n?|```$/g, '');
@@ -72,14 +97,7 @@ export const generateQuizQuestions = async (cards: FlashcardData[]): Promise<Qui
       id: `quiz-${index}-${Date.now()}`
     }));
   } catch (error) {
-    console.error("Gemini Quiz Generation Error:", error);
-    // 실패 시 사용자에게 알리고 학습 데이터를 바탕으로 기본 퀴즈 생성
-    return selectedCards.map((card, index) => ({
-      id: `fallback-${index}`,
-      word: card.word,
-      correctAnswer: card.definition,
-      options: [card.definition, "잘못된 뜻 1", "잘못된 뜻 2", "잘못된 뜻 3"].sort(() => Math.random() - 0.5),
-      explanation: "AI 서비스 일시적 오류로 기본 퀴즈를 제공합니다."
-    }));
+    console.error("Gemini API Error, falling back to local quiz:", error);
+    return createFallbackQuiz();
   }
 };
